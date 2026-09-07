@@ -1,0 +1,79 @@
+name: Generate PowerPoint from Communication Plan
+
+# Ce workflow convertit automatiquement le fichier Markdown Marp
+# (docs/plan-communication-databricks.md) en fichier PowerPoint (.pptx)
+# à chaque modification, et publie le résultat en tant qu'artifact
+# téléchargeable depuis l'onglet "Actions" du repository.
+#
+# ⚠️ IMPORTANT : ce fichier doit être déplacé manuellement vers
+# .github/workflows/generate-pptx.yml pour être actif
+# (déplacement impossible via l'API pour des raisons de permissions).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/plan-communication-databricks.md"
+      - ".github/workflows/generate-pptx.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-pptx:
+    name: Build .pptx from Marp Markdown
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Marp CLI
+        run: npm install -g @marp-team/marp-cli
+
+      - name: Generate PowerPoint file
+        run: |
+          mkdir -p dist
+          marp docs/plan-communication-databricks.md \
+            --pptx \
+            --allow-local-files \
+            -o dist/plan-communication-databricks.pptx
+
+      - name: Generate PDF version (bonus)
+        run: |
+          marp docs/plan-communication-databricks.md \
+            --pdf \
+            --allow-local-files \
+            -o dist/plan-communication-databricks.pdf
+
+      - name: Upload .pptx as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-communication-databricks-pptx
+          path: dist/plan-communication-databricks.pptx
+          retention-days: 90
+
+      - name: Upload .pdf as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-communication-databricks-pdf
+          path: dist/plan-communication-databricks.pdf
+          retention-days: 90
+
+      - name: Commit generated files back to repo (optional)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p exports
+          cp dist/plan-communication-databricks.pptx exports/
+          cp dist/plan-communication-databricks.pdf exports/
+          git add exports/
+          git diff --staged --quiet || git commit -m "chore: regenerate pptx/pdf from communication plan [skip ci]"
+          git push
